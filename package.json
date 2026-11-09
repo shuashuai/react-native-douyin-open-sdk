@@ -1,6 +1,6 @@
 {
-  "name": "react-native-douyin-open-sdk",
-  "version": "0.1.0",
+  "name": "@code_shuai/react-native-douyin-open-sdk",
+  "version": "0.0.1",
   "description": "Cross-platform React Native bridge for Douyin Open SDK sharing",
   "license": "MIT",
   "main": "lib/index.js",

@@ -1,0 +1,10 @@
+node_modules/
+android/build/
+ios/build/
+*.tgz
+.DS_Store
+
+.npmrc
+.env
+.env.*
+npm-debug.log*

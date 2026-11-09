@@ -1,0 +1,2 @@
+-keep class com.bytedance.sdk.open.** { *; }
+-keep class com.finstao.douyin.DouyinCallbackActivity { *; }

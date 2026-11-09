@@ -1,0 +1,65 @@
+{
+  "name": "react-native-douyin-open-sdk",
+  "version": "0.1.0",
+  "description": "Cross-platform React Native bridge for Douyin Open SDK sharing",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "react-native": "src/index.ts",
+  "files": [
+    "src",
+    "lib",
+    "android",
+    "ios",
+    "*.podspec",
+    "README.md",
+    "docs",
+    "example",
+    "!android/build",
+    "!android/.gradle",
+    "!ios/build",
+    "react-native.config.js"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "prepublishOnly": "npm test && node scripts/check-package.cjs",
+    "release:check": "npm run prepublishOnly && npm pack --dry-run"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-native": ">=0.73"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "@types/react": "^19.0.0",
+    "react": "19.2.0",
+    "react-native": "0.83.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shuashuai/react-native-douyin-open-sdk.git"
+  },
+  "homepage": "https://github.com/shuashuai/react-native-douyin-open-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/shuashuai/react-native-douyin-open-sdk/issues"
+  },
+  "author": {
+    "name": "shuashuai"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "keywords": [
+    "react-native",
+    "douyin",
+    "share",
+    "ios",
+    "android"
+  ]
+}

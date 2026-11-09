@@ -1,25 +1,80 @@
-# react-native-douyin-open-sdk
+# @code_shuai/react-native-douyin-open-sdk
 
-独立 React Native 抖音分享桥接库，0.1.0。统一 API，原生差异在库内适配。尚未发布 npm；源码仓库：https://github.com/shuashuai/react-native-douyin-open-sdk。只实现 SDK，没有接入或修改 promoter-app。
+React Native 抖音分享 SDK，提供 Android / iOS 统一调用接口，支持作品图片、视频分享，以及好友或群聊单图、链接分享。
 
-实现版本：Android Open SDK **0.2.0.10**；iOS **4.2.5**。Android 官方文档的 0.2.0.11 存在无法解析的 polaris 传递依赖，本库没有排除该安全组件来强行构建，改用上一正式版本；详情见 [验证记录](docs/VALIDATION.md)。
+[源码仓库](https://github.com/shuashuai/react-native-douyin-open-sdk) · [示例屏幕](example/ShareExample.tsx) · [平台差异](docs/PLATFORM-DIFFERENCES.md)
 
-当前为待真机联调版本。TS/逻辑测试、Android 库构建、iOS 桥接编译分别记录，不把静态检查等同于分享成功。新架构采用 RN 原生模块互操作，不是独立 TurboModule codegen 实现。
+## 功能
 
-## 安装
+| 功能 | Android | iOS |
+| --- | --- | --- |
+| 图片、图集、视频分享到作品流程 | 支持 | 支持 |
+| 单视频直接进入发布页 | 支持，受抖音版本限制 | 支持，受抖音版本限制 |
+| 单图分享给好友/群 | 支持 | 支持 |
+| 网页链接卡片分享给好友/群 | 支持，需权限与链接验证 | 支持，需权限与链接验证 |
+| 安装检测、能力查询 | 支持 | 安装检测支持；细项能力返回 unknown |
+| 本地素材准备 | 文件读取校验及分享时 URI 授权 | 显式导入相册或使用现有相册资源 |
+| 分享回调、超时、停止本地等待 | 支持 | 支持 |
 
-在本目录：
+不包含登录授权、网络媒体下载、海报生成、通用文件附件、纯文字发布或混合素材分享。HTML / PDF / Word 等内容可由业务生成在线页面，再作为链接卡片分享。
 
-```sh
+当前为首版，完整宿主与真机分享联调尚未完成，见 [验证记录](docs/VALIDATION.md)。回调 success 表示 SDK 响应成功，不保证作品最终发布或消息送达。
+
+## 下载安装
+
+### npm / Yarn
+
+包发布后安装：
+
+```bash
+npm install @code_shuai/react-native-douyin-open-sdk
+# 或
+yarn add @code_shuai/react-native-douyin-open-sdk
+```
+
+如果版本仅发布到 next 标签，在包名后加 `@next`。是否已经发布及可用版本以 npm 仓库为准。
+
+### 本地安装包
+
+尚未发布时，可在 SDK 源码目录生成安装包：
+
+```bash
 npm install
-npm run typecheck
-npm test
+npm run build
 npm pack
 ```
 
-在独立测试宿主中安装生成的 tgz，执行 `pod install`，重新编译安装两端 App。SDK 包含编译后的 lib，可直接使用 tgz，无 prepare 安装脚本。
+在使用 SDK 的 App 中安装生成的 `.tgz`：
 
-目标 RN 0.83.3；JS peer 范围 >=0.73 不是已测试兼容承诺。Android minSdk 24、Java 17；iOS deployment target 15.1。使用宿主提供的 AGP/Gradle 版本，并保证与其 RN 版本兼容。
+```bash
+npm install /absolute/path/to/code_shuai-react-native-douyin-open-sdk-0.0.1.tgz
+```
+
+文件名以 npm pack 的实际输出为准。iOS 安装后执行：
+
+```bash
+cd ios
+pod install
+```
+
+完成下方平台配置后，重新编译安装 App；仅刷新 JavaScript 无法加载原生模块。
+
+### 环境要求
+
+| 环境 | 要求 |
+| --- | --- |
+| React Native | 目标版本 0.83.3；peer 范围 >=0.73 不代表均已测试 |
+| React | >=18 |
+| Node.js（SDK 开发） | >=20 |
+| Android | minSdk 24、Java 17；AGP / Gradle 与宿主 RN 版本匹配 |
+| iOS | >=15.1 |
+| 抖音原生 SDK | Android 0.2.0.10；iOS 4.2.5 |
+
+RN 新架构使用原生模块互操作，非独立 TurboModule codegen。Android 原生版本选择及 iOS 模拟器限制见 [验证记录](docs/VALIDATION.md)。
+
+## 平台配置
+
+接入前在抖音开放平台创建移动应用，获得 clientKey，配置 Android 包名/签名和 iOS Bundle ID，并申请所需分享权限。SDK 不需要 clientSecret。
 
 ### Android 配置
 
@@ -73,104 +128,259 @@ if ([RNDouyinOpenSDK application:application openURL:url options:options]) retur
 
 权限由宿主显式申请，本库不弹授权窗口。媒体准备/分享要求 Photos readWrite 为 authorized 或 limited；limited 时只处理宿主可访问的资产，不能保证抖音侧也有相册权限。
 
-## API
+## 快速开始
+
+### 1. 初始化
 
 ```ts
-import Douyin from 'react-native-douyin-open-sdk'
+import Douyin from '@code_shuai/react-native-douyin-open-sdk'
+
+// 在完成原生配置、获得用户对 SDK 隐私条款的同意后调用。
 await Douyin.configure({ clientKey: 'YOUR_CLIENT_KEY' })
-const installed = await Douyin.isAppInstalled()
-const capabilities = await Douyin.getCapabilities()
+
+if (!(await Douyin.isAppInstalled())) {
+  // 由业务自行提示用户安装抖音。
+  return
+}
 ```
 
-| 方法 | 返回 | 说明 |
-| --- | --- | --- |
-| configure({ clientKey }) | Promise<void> | 注册 SDK；有分享等待时不能重配 |
-| isAppInstalled() | Promise<boolean> | 检查抖音主版，不代表分享权限 |
-| getCapabilities() | Promise<Capabilities> | supported / unsupported / unknown，不代表账号 scope 已获批 |
-| prepareResources(resources, options) | Promise<Resource[]> | 显式本地资源准备，不下载网络素材 |
-| share(request, options?) | Promise<ShareResult> | 图片/视频到作品流程 |
-| shareToContacts(request, options?) | Promise<ShareResult> | 单图或链接到好友/群 |
-| cancelPendingShare() | Promise<void> | 停止本地等待，不取消抖音中的操作 |
+### 2. 分享图片和文案到作品
 
-Capabilities 字段：share、shareToContacts、shareToPublish、mixShare。Android 使用对应官方能力检测；iOS 未找到可靠对等查询，安装主版后前三项返回 unknown，未安装则 unsupported。不据版本字符串猜测支持。混合素材不在首期范围，两端 mixShare 均为 unsupported。
+```ts
+// iOS：先由宿主申请 Photos readWrite 权限。
+// allowPhotoLibraryWrite=true 会将文件保存到相册，必须由用户明确触发。
+const resources = await Douyin.prepareResources(
+  [{ type: 'file', uri: 'file:///local/image.jpg' }],
+  { mediaType: 'image', allowPhotoLibraryWrite: true },
+)
 
-### 素材准备
+const result = await Douyin.share({
+  mediaType: 'image',
+  resources,
+  title: '作品文案',
+  imageAlbumMode: true,
+  targetPage: 'edit',
+})
+```
+
+### 3. 分享视频
 
 ```ts
 const resources = await Douyin.prepareResources(
-  [{ type: 'file', uri: 'file:///local/image.png' }],
-  { mediaType: 'image', allowPhotoLibraryWrite: true },
+  [{ type: 'file', uri: 'file:///local/video.mp4' }],
+  { mediaType: 'video', allowPhotoLibraryWrite: true },
 )
-await Douyin.share({ mediaType: 'image', resources, targetPage: 'edit', title: '作品文案' })
+
+await Douyin.share({ mediaType: 'video', resources, targetPage: 'publish' })
 ```
 
-资源联合：
+`publish` 只接受单视频；需要进入编辑流程时使用 `edit`。最终能否使用仍由抖音版本、权限和资源条件决定。
 
-- `{ type: 'file', uri }`：file:/// 本地文件；Android 也接受宿主可读取的 content://。不接受 HTTP 图片/视频 URL。
-- `{ type: 'photoAsset', localIdentifier }`：仅 iOS，已有相册标识。
-
-prepare options：mediaType 必填 image/video；allowPhotoLibraryWrite 默认 false，只在 iOS 本地文件导入时生效。iOS 必须先获得 Photos 权限并明确传 true；素材会持久保留在相册，库不自动删除，重复准备可能生成重复资产。已有相册资源会校验类型和可访问性。失败后如已产生资产，不会自动删除用户相册内容。
-
-Android prepare 验证读取权限，返回原资源；真正 share 时后台复制到库自己的缓存目录并临时授权给抖音。最多 12 项，每个缓存文件上限 512 MiB（本库保护限制）。文件需有可识别扩展名或 ContentResolver MIME；不会转码。
-
-Android 正常响应后清理临时资源；本地取消/超时后保留授权和缓存最多约 24 小时，避免立即中断抖音读取。进程被杀时下次 configure 清理过期缓存；本库不保证远端操作最终成功。
-
-### 作品参数
-
-| 参数 | 类型 / 默认 | 说明 |
-| --- | --- | --- |
-| mediaType | image / video，必填 | 不支持纯文字或混合类型 |
-| resources | Resource[]，必填 | 1–12，使用保守跨端上限；原生仍可能因尺寸/时长拒绝 |
-| targetPage | edit / publish，默认 edit | publish 只接受一个视频，受抖音版本/权限限制 |
-| imageAlbumMode | boolean，默认 false | 仅图片；Android ImageAlbumObject / iOS imageAlbumMode |
-| title | string，可选 | 文案：Android ShareParam.titleObject.title，iOS ShareTitle.text，非独立纯文字发布 |
-| state | string，可选 | 原样传给官方 SDK，不用于库内部请求关联 |
-
-不自行截断标题或偷偷降级目标页面，原生不支持或资源限制导致的失败向调用者返回。真实图集、标题效果待已配置账号真机验证。
-
-### 好友参数
+### 4. 分享给好友或群
 
 ```ts
+// 单图：resources 是 prepareResources 返回的图片资源，且只能有一项。
+await Douyin.shareToContacts({ mediaType: 'image', resources })
+
+// 网页链接：不需要下载网页或封面。
 await Douyin.shareToContacts({
   mediaType: 'link',
   link: {
     url: 'https://example.com/share/123',
-    title: '标题',
-    description: '描述',
+    title: '报告标题',
+    description: '点击查看完整内容',
     thumbnailUrl: 'https://example.com/cover.jpg',
   },
 })
-// 单图：先准备资源，再传 { mediaType: 'image', resources, state? }
 ```
 
-link.url/title/description 必填，thumbnailUrl 可选；URL 与封面使用无内嵌账号密码的完整 HTTPS 地址。link 和 resources 互斥。好友图片只允许一张。不接受通用文件、HTML 源码、纯文本、多图或视频。
+上述单图示例需使用图片准备示例的 resources，不要使用视频示例的资源。好友链接需要 im.share 和页面链接验证，动态路径是否覆盖以后台规则为准。
 
-好友链接需 im.share 权限和链接验证；同域名动态路径是否全覆盖由后台实际规则决定，库无法离线确认。远程封面和网页按链接协议交给官方 SDK，不属于本库媒体下载能力。
+### 5. 处理结果与异常
 
-### 回调和错误
+```ts
+try {
+  const result = await Douyin.shareToContacts({
+    mediaType: 'link',
+    link: { url: 'https://example.com/share/123', title: '标题', description: '描述' },
+  }, { timeoutMs: 120000 })
+
+  switch (result.status) {
+    case 'success': // SDK 回调成功，不等于作品最终发布。
+      break
+    case 'cancelled': // 用户在抖音侧取消。
+      break
+    case 'failed':
+    case 'unknown':
+      console.log(result.nativeResponse)
+      break
+  }
+}
+catch (error) {
+  // 本地参数、权限、原生桥接、等待超时等异常。
+  const failure = error as { code?: string; message?: string }
+  console.log(failure.code, failure.message)
+}
+```
+
+## API
+
+所有方法通过 `Douyin` 调用。也支持具名导入 `import { Douyin } from '...'`。请求中的未知字段会被拒绝，不会任意透传给原生 SDK。
+
+| 方法 | 返回值 | 功能 |
+| --- | --- | --- |
+| configure(config) | Promise<void> | 初始化 |
+| isAppInstalled() | Promise<boolean> | 检测抖音主版 |
+| getCapabilities() | Promise<Capabilities> | 查询能力 |
+| prepareResources(resources, options) | Promise<Resource[]> | 准备本地素材 |
+| share(request, options?) | Promise<ShareResult> | 分享作品 |
+| shareToContacts(request, options?) | Promise<ShareResult> | 好友/群分享 |
+| cancelPendingShare() | Promise<void> | 停止本地等待 |
+
+### configure(config)
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| clientKey | string | 是 | 抖音开放平台移动应用的 clientKey，不能为空 |
+
+在调用其他查询、准备及分享方法前完成初始化。有分享等待时不能重新配置，会返回 E_BUSY。
+
+### isAppInstalled()
+
+无参数，返回是否安装抖音主版。安装成功不代表版本支持全部能力，也不代表开放平台账号已获得分享权限。
+
+### getCapabilities()
+
+无参数，返回以下字段；每项值均为 `supported`、`unsupported` 或 `unknown`：
+
+| 字段 | 说明 |
+| --- | --- |
+| share | 作品分享 |
+| shareToContacts | 好友/群分享 |
+| shareToPublish | 直接进入发布页 |
+| mixShare | 混合素材分享；当前版本固定 unsupported |
+
+Android 调用对应官方能力查询。iOS 主版已安装时前三项返回 unknown，未安装时返回 unsupported；不会仅凭版本猜测支持。unknown 表示无法预检，不等于不支持，实际调用由 SDK 响应决定。
+
+### prepareResources(resources, options)
+
+resources 为 1–12 项资源。支持两种 Resource，字段不能混用：
+
+| type | 参数 | 平台 | 说明 |
+| --- | --- | --- | --- |
+| file | uri: string | Android / iOS | file:/// 本地文件；Android 额外接受可读取的 content:// |
+| photoAsset | localIdentifier: string | iOS | 系统相册资源标识，不是文件路径 |
+
+options：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| mediaType | image / video | 是 | — | 准备的素材类型 |
+| allowPhotoLibraryWrite | boolean | 否 | false | 允许 iOS 本地文件显式写入相册；Android 不使用此选项 |
+
+返回适合后续分享的 Resource[]。iOS 已有相册资源校验类型和可访问性；导入文件需提前获得 readWrite 权限，并传 true。图片/视频会留在用户相册，库不自动删除，重复导入可能产生重复资产。
+
+Android 此方法校验读取能力并返回原资源；实际分享时复制到专用缓存并授权给抖音，每个缓存文件上限 512 MiB，必须可判断扩展名/MIME，不转码。正常回调后清理；本地取消/超时后延迟约 24 小时清理，进程结束时在下次 configure 清理过期项。
+
+HTTP 图片/视频必须由业务先下载。链接卡片的 url / thumbnailUrl 不受此限制。
+
+### share(request, options?)
+
+request：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| mediaType | image / video | 是 | — | 作品媒体类型 |
+| resources | Resource[] | 是 | — | 1–12 项，同一媒体类型；建议先 prepareResources |
+| targetPage | edit / publish | 否 | edit | publish 只允许一个视频 |
+| imageAlbumMode | boolean | 否 | false | 仅图片可设置；图集模式 |
+| title | string | 否 | — | 非空作品文案，不是纯文字发布 |
+| state | string | 否 | — | 非空上下文，传给官方 SDK，不作为库内部关联 ID |
+
+图片尺寸、视频时长及标题限制仍受原生 SDK 与抖音版本约束。库不截断、不转码、不静默降级；图片不能直接指定 publish。
+
+### shareToContacts(request, options?)
+
+支持以下两种互斥请求：
+
+| 参数 | 单图请求 | 链接请求 |
+| --- | --- | --- |
+| mediaType | image，必填 | link，必填 |
+| resources | Resource[]，必填且仅一项 | 不允许 |
+| link | 不允许 | Link 对象，必填 |
+| state | 可选非空 string | 可选非空 string |
+
+Link 参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| url | string | 是 | 完整 HTTPS 网页地址 |
+| title | string | 是 | 非空卡片标题 |
+| description | string | 是 | 非空卡片描述 |
+| thumbnailUrl | string | 否 | HTTPS 远程封面图 |
+
+URL 不接受内嵌账号密码。不支持好友视频、多图、纯文本、HTML 源码或任意文件附件。
+
+### 分享公共 options
+
+share / shareToContacts 的第二个参数：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| timeoutMs | number | 否 | 120000 | 本地等待毫秒数，整数 1000–600000 |
+
+这是库的等待策略，不是抖音发布时限。一次只能等待一个分享请求，其他请求返回 E_BUSY。不自动重试，回到前台不判定成功。
+
+### cancelPendingShare()
+
+无参数。终止本地等待，使等待中的分享 Promise reject E_CANCELLED；没有等待时不执行任何操作。不会撤销抖音内正在进行的分享。超时同样仅终止本地等待，返回 E_TIMEOUT。进程重建后不会恢复旧 Promise。
+
+## 返回结果
 
 ShareResult：
 
-```ts
-{ status: 'success' | 'cancelled' | 'failed' | 'unknown',
-  platform: 'android' | 'ios', nativeResponse: { /* 原生诊断字段 */ } }
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| status | success / cancelled / failed / unknown | SDK 回调阶段的统一状态 |
+| platform | android / ios | 响应平台 |
+| nativeResponse | Record<string, unknown> | 原生诊断信息 |
+
+用户取消、官方 SDK 业务失败通过 resolve 返回；本地异常通过 reject 返回。Android 保留 errorCode/errorMsg，作品额外保留 state/subErrorCode；iOS 保留 isSucceed/errCode/errString/shareState/subErrorCode/state。不要跨平台复用错误码含义。
+
+Android 回调要求官方 callbackExtras 的内部关联值匹配；旧抖音若不返回会超时。iOS 按请求关联过滤迟到回调。更多联调事项见 [验证记录](docs/VALIDATION.md)。
+
+## 本地错误码
+
+| 错误码 | 含义 / 处理 |
+| --- | --- |
+| E_NOT_LINKED | 原生模块未加载，安装 Pods 后重新编译 |
+| E_NOT_CONFIGURED | 先 configure |
+| E_INVALID_ARGUMENT | 检查必填、未知字段及互斥参数 |
+| E_BUSY | 已有请求在等待，或分享期间重新配置 |
+| E_NOT_INSTALLED | 未安装抖音主版 |
+| E_UNSUPPORTED | 平台或抖音版本不支持该能力 |
+| E_PERMISSION | 宿主需先申请相册权限 |
+| E_PHOTO_WRITE_REQUIRED | iOS 文件导入需显式允许写相册 |
+| E_RESOURCE / E_RESOURCE_FORMAT | 素材不可读、类型或格式不符 |
+| E_RESOURCE_TOO_LARGE | 超过 Android 缓存文件大小上限 |
+| E_TIMEOUT / E_CANCELLED | 等待超时 / 主动停止本地等待 |
+| E_SEND_FAILED | 原生 SDK 拒绝发起请求 |
+| E_CONFIGURE | 注册 SDK 失败 |
+| E_NO_ACTIVITY | Android 没有可用 Activity |
+| E_INVALIDATED | RN 实例已失效 |
+| E_NATIVE | 其他原生异常，结合 message 排查 |
+
+## 开发与发布
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run release:check
 ```
 
-resolve 只说明 SDK 回调已返回；success 不保证作品已发布、消息已送达或内容审核通过。Android 原生 errorCode/errorMsg、作品 state/subErrorCode 保留；iOS isSucceed/errCode/errString/shareState/subErrorCode/state 保留。账号权限等官方失败和用户取消 resolve 结果，本地故障 reject。
+[发布说明](docs/RELEASING.md) · [产品文档](docs/PRD.md) · [验证记录](docs/VALIDATION.md)
 
-本地错误包括 E_NOT_LINKED、E_NOT_CONFIGURED、E_INVALID_ARGUMENT、E_BUSY、E_NOT_INSTALLED、E_UNSUPPORTED、E_PERMISSION、E_RESOURCE、E_RESOURCE_FORMAT、E_RESOURCE_TOO_LARGE、E_PHOTO_WRITE_REQUIRED、E_SEND_FAILED、E_TIMEOUT、E_CANCELLED、E_CONFIGURE、E_NO_ACTIVITY、E_INVALIDATED、E_NATIVE。保留 message，勿把两端官方错误码混用。
+## License
 
-share 第二参数 `{ timeoutMs }` 默认 120000，允许整数 1000–600000；这是库的等待策略，不是实测的抖音发布时限。超时终止等待并 reject E_TIMEOUT。仅一个请求可处于等待；不自动重试，回前台不判成功。
-
-Android 用官方 callbackExtras 携带独立随机关联值，回调必须匹配类型和关联值；不接受无法关联的回调，旧抖音若不返回该值会超时，需要真机检查。iOS completion 按内部请求 ID 去重，迟到回调不影响新请求。state 不被库改写。
-
-## 开发与验证
-
-- [产品范围](docs/PRD.md)
-- [平台差异](docs/PLATFORM-DIFFERENCES.md)
-- [验证记录/待联调](docs/VALIDATION.md)
-- [独立示例屏幕](example/ShareExample.tsx)
-
-仓库包含集成示例屏幕，而非已经配置签名和 clientKey 的完整 App。开发依赖安装完成后用 npm test；没有改动任何宿主工程。podspec 指向 GitHub 仓库的 v版本号标签；发布前需推送对应标签。npm 发布步骤见 docs/RELEASING.md。
-
-MIT 仅覆盖本桥接库，抖音原生 SDK 按其官方许可使用，不在本仓库 vendoring 官方二进制。
+[MIT](LICENSE)。仅覆盖本桥接库；抖音官方 SDK 遵循其自己的许可。

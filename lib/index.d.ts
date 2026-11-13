@@ -8,6 +8,7 @@ export declare const Douyin: {
     prepareResources(items: import("./types").Resource[], options: import("./types").PrepareOptions): Promise<import("./types").Resource[]>;
     share(request: import("./types").MediaRequest, options?: import("./types").ShareOptions): Promise<import("./types").ShareResult>;
     shareToContacts(request: import("./types").ContactRequest, options?: import("./types").ShareOptions): Promise<import("./types").ShareResult>;
+    forwardToDaily(request: import("./types").DailyRequest, options?: import("./types").ShareOptions): Promise<import("./types").ShareResult>;
     cancelPendingShare(): Promise<void>;
 };
 export default Douyin;

@@ -83,12 +83,15 @@ RCT_REMAP_METHOD(prepareResources, prepare:(NSArray *)resources options:(NSDicti
   }];
 }
 RCT_REMAP_METHOD(share, share:(NSDictionary *)request requestId:(NSString *)requestId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-  [self send:request requestId:requestId contacts:NO resolve:resolve reject:reject];
+  [self send:request requestId:requestId contacts:NO daily:NO resolve:resolve reject:reject];
 }
 RCT_REMAP_METHOD(shareToContacts, contacts:(NSDictionary *)request requestId:(NSString *)requestId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-  [self send:request requestId:requestId contacts:YES resolve:resolve reject:reject];
+  [self send:request requestId:requestId contacts:YES daily:NO resolve:resolve reject:reject];
 }
-- (void)send:(NSDictionary *)data requestId:(NSString *)requestId contacts:(BOOL)contacts resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+RCT_REMAP_METHOD(forwardToDaily, forward:(NSDictionary *)request requestId:(NSString *)requestId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
+  [self send:request requestId:requestId contacts:NO daily:YES resolve:resolve reject:reject];
+}
+- (void)send:(NSDictionary *)data requestId:(NSString *)requestId contacts:(BOOL)contacts daily:(BOOL)daily resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
   if(![self ready:reject]) return;
   if(_pendingId) { reject(@"E_BUSY",@"Share pending",nil); return; }
   if(![self installed]) { reject(@"E_NOT_INSTALLED",@"Douyin main App not installed",nil); return; }
@@ -96,6 +99,10 @@ RCT_REMAP_METHOD(shareToContacts, contacts:(NSDictionary *)request requestId:(NS
   req.targetApp=DouyinOpenSDKTargetDouyinApp;
   req.shareAction=contacts?DouyinOpenSDKShareTypeShareContentToIM:DouyinOpenSDKShareTypePublishMedia;
   req.state=data[@"state"];
+  if (daily) {
+    req.publishStory = YES;
+    req.useNewShareAbility = YES;
+  }
   if([data[@"mediaType"] isEqual:@"link"]) {
     NSDictionary *link=data[@"link"];
     DouyinOpenSDKShareLink *obj=[DouyinOpenSDKShareLink new];
@@ -111,7 +118,7 @@ RCT_REMAP_METHOD(shareToContacts, contacts:(NSDictionary *)request requestId:(NS
     req.mediaType=[data[@"mediaType"] isEqual:@"video"]?DouyinOpenSDKShareMediaTypeVideo:DouyinOpenSDKShareMediaTypeImage;
     req.localIdentifiers=identifiers;
     req.imageAlbumMode=[data[@"imageAlbumMode"] boolValue];
-    req.landedPageType=[data[@"targetPage"] isEqual:@"publish"]?DouyinOpenSDKLandedPagePublish:DouyinOpenSDKLandedPageEdit;
+    if (!daily) req.landedPageType=[data[@"targetPage"] isEqual:@"publish"]?DouyinOpenSDKLandedPagePublish:DouyinOpenSDKLandedPageEdit;
     if(data[@"title"]) { req.useNewShareAbility=YES; req.title=[DouyinOpenSDKShareTitle new]; req.title.text=data[@"title"]; }
   }
   _request=req; _pendingId=requestId; _resolve=resolve; _reject=reject;

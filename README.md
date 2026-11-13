@@ -9,6 +9,7 @@ React Native 抖音分享 SDK，提供 Android / iOS 统一调用接口，支持
 | 功能 | Android | iOS |
 | --- | --- | --- |
 | 图片、图集、视频分享到作品流程 | 支持 | 支持 |
+| 单张图片或单个视频转发到日常 | 支持，需要 `aweme.forward` | 支持，需要 `aweme.forward` |
 | 单视频直接进入发布页 | 支持，受抖音版本限制 | 支持，受抖音版本限制 |
 | 单图分享给好友/群 | 支持 | 支持 |
 | 网页链接卡片分享给好友/群 | 支持，需权限与链接验证 | 支持，需权限与链接验证 |
@@ -234,6 +235,7 @@ catch (error) {
 | getCapabilities() | Promise<Capabilities> | 查询能力 |
 | prepareResources(resources, options) | Promise<Resource[]> | 准备本地素材 |
 | share(request, options?) | Promise<ShareResult> | 分享作品 |
+| forwardToDaily(request, options?) | Promise<ShareResult> | 转发单张图片或单个视频到日常 |
 | shareToContacts(request, options?) | Promise<ShareResult> | 好友/群分享 |
 | cancelPendingShare() | Promise<void> | 停止本地等待 |
 
@@ -298,6 +300,28 @@ request：
 | state | string | 否 | — | 非空上下文，传给官方 SDK，不作为库内部关联 ID |
 
 图片尺寸、视频时长及标题限制仍受原生 SDK 与抖音版本约束。库不截断、不转码、不静默降级；图片不能直接指定 publish。
+
+### forwardToDaily(request, options?)
+
+初始化后，用 `prepareResources` 准备一项本地图片或视频资源，再传给此方法。抖音开放平台需开通 `aweme.forward`；SDK 返回值仍为 `ShareResult`。可选的 `options.timeoutMs` 与 `share` 相同。
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| mediaType | `'image' \| 'video'` | 必填，选择素材类型 |
+| resources | `[Resource]` | 必填，仅允许一个已准备的素材 |
+| state | string | 选填，分享上下文 |
+
+```ts
+const resources = await Douyin.prepareResources(
+  [{ type: 'file', uri: 'file:///local/image.jpg' }],
+  { mediaType: 'image', allowPhotoLibraryWrite: true },
+)
+
+await Douyin.forwardToDaily({
+  mediaType: 'image',
+  resources: [resources[0]],
+})
+```
 
 ### shareToContacts(request, options?)
 

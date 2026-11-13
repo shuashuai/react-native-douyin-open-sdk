@@ -1,4 +1,4 @@
-import type { NativeBridge, Config, Resource, PrepareOptions, MediaRequest, ContactRequest, ShareOptions, ShareResult } from './types';
+import type { NativeBridge, Config, Resource, PrepareOptions, MediaRequest, ContactRequest, DailyRequest, ShareOptions, ShareResult } from './types';
 export declare class DouyinError extends Error {
     code: string;
     constructor(code: string, message: string);
@@ -11,5 +11,6 @@ export declare function createDouyin(native: NativeBridge): {
     prepareResources(items: Resource[], options: PrepareOptions): Promise<Resource[]>;
     share(request: MediaRequest, options?: ShareOptions): Promise<ShareResult>;
     shareToContacts(request: ContactRequest, options?: ShareOptions): Promise<ShareResult>;
+    forwardToDaily(request: DailyRequest, options?: ShareOptions): Promise<ShareResult>;
     cancelPendingShare(): Promise<void>;
 };

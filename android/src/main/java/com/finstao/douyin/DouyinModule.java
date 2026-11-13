@@ -10,6 +10,7 @@ import com.bytedance.sdk.open.aweme.adapter.okhttp.OpenNetworkOkHttpServiceImpl;
 import com.bytedance.sdk.open.aweme.adapter.image.picasso.PicassoOpenImageServiceImpl;
 import com.bytedance.sdk.open.aweme.core.OpenHostInfoService;
 import android.content.pm.PackageInfo;
+import android.util.Log;
 import android.util.SparseArray;
 import androidx.core.content.FileProvider;
 import com.facebook.react.bridge.*;
@@ -19,6 +20,7 @@ import com.bytedance.sdk.open.douyin.ShareToContact;
 import com.bytedance.sdk.open.douyin.model.ContactHtmlObject;
 import com.bytedance.sdk.open.aweme.init.DouYinOpenSDKConfig;
 import com.bytedance.sdk.open.aweme.base.*;
+import com.bytedance.sdk.open.aweme.CommonConstants.ModeType;
 import com.bytedance.sdk.open.aweme.share.Share;
 import com.bytedance.sdk.open.aweme.common.model.BaseResp;
 import java.io.*;
@@ -33,6 +35,7 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
   private String pendingId;
   private int pendingType;
   private String callbackToken;
+  private boolean usesGeneratedState;
   private File pendingDir;
   private final ArrayList<Uri> grants = new ArrayList<>();
   private String clientKey;
@@ -111,9 +114,10 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
       } catch (Exception e) { reject(p,e); }
     });
   }
-  @ReactMethod public void share(ReadableMap request, String id, Promise p) { start(request,id,p,false); }
-  @ReactMethod public void shareToContacts(ReadableMap request, String id, Promise p) { start(request,id,p,true); }
-  private void start(ReadableMap request, String id, Promise p, boolean contacts) {
+  @ReactMethod public void share(ReadableMap request, String id, Promise p) { start(request,id,p,false,false); }
+  @ReactMethod public void shareToContacts(ReadableMap request, String id, Promise p) { start(request,id,p,true,false); }
+  @ReactMethod public void forwardToDaily(ReadableMap request, String id, Promise p) { start(request,id,p,false,true); }
+  private void start(ReadableMap request, String id, Promise p, boolean contacts, boolean daily) {
     UiThreadUtil.runOnUiThread(() -> {
       try {
         DouYinOpenApi a = api();
@@ -121,7 +125,7 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
         if (!a.isAppInstalled()) throw new IllegalStateException("E_NOT_INSTALLED");
         if (contacts ? !a.isAppSupportShareToContacts() : !a.isAppSupportShare()) throw new IllegalStateException("E_UNSUPPORTED");
         boolean publish = request.hasKey("targetPage") && "publish".equals(request.getString("targetPage"));
-        if (publish && !a.isAppSupportShareToPublish()) throw new IllegalStateException("E_UNSUPPORTED");
+        if (!daily && publish && !a.isAppSupportShareToPublish()) throw new IllegalStateException("E_UNSUPPORTED");
         pending=p; pendingId=id; callbackToken=UUID.randomUUID().toString();
         pendingDir = new File(getReactApplicationContext().getCacheDir(), "rn-douyin/" + UUID.randomUUID());
         if (!pendingDir.mkdirs()) throw new IOException("E_RESOURCE");
@@ -151,7 +155,7 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
             }
             UiThreadUtil.runOnUiThread(() -> {
               if (!id.equals(pendingId)) { delete(dir); return; }
-              try { launch(request, paths, contacts, publish, a); }
+              try { launch(request, paths, contacts, publish && !daily, daily, a); }
               catch(Exception e) { failPending(e); }
             });
           } catch(Exception e) { UiThreadUtil.runOnUiThread(() -> { if(id.equals(pendingId)) failPending(e); else delete(dir); }); }
@@ -159,7 +163,7 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
       } catch(Exception e) { if(pending==p) failPending(e); else reject(p,e); }
     });
   }
-  private void launch(ReadableMap request, ArrayList<String> paths, boolean contacts, boolean publish, DouYinOpenApi a) throws Exception {
+  private void launch(ReadableMap request, ArrayList<String> paths, boolean contacts, boolean publish, boolean daily, DouYinOpenApi a) throws Exception {
     if(!paths.isEmpty() && !a.isShareSupportFileProvider()) throw new IllegalStateException("E_UNSUPPORTED");
     ArrayList<String> uris=new ArrayList<>();
     for(String path:paths) {
@@ -168,10 +172,27 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
       grants.add(uri); uris.add(uri.toString());
     }
     MediaContent content = new MediaContent();
-    if("video".equals(request.getString("mediaType"))) { VideoObject obj=new VideoObject(); obj.mVideoPaths=uris; content.mMediaObject=obj; }
-    else { ImageAlbumObject obj=new ImageAlbumObject(); obj.mImagePaths=uris; obj.setImageAlbum(request.hasKey("imageAlbumMode") && request.getBoolean("imageAlbumMode")); content.mMediaObject=obj; }
+    String mediaType = request.getString("mediaType");
+    boolean album = request.hasKey("imageAlbumMode") && request.getBoolean("imageAlbumMode");
+    if ("video".equals(mediaType)) {
+      VideoObject video = new VideoObject();
+      video.mVideoPaths = uris;
+      content.mMediaObject = video;
+    } else if ("image".equals(mediaType)) {
+      if (!daily && (contacts || album)) {
+        ImageAlbumObject images = new ImageAlbumObject();
+        images.mImagePaths = uris;
+        images.setImageAlbum(album);
+        content.mMediaObject = images;
+      } else {
+        ImageObject images = new ImageObject();
+        images.mImagePaths = uris;
+        content.mMediaObject = images;
+      }
+    }
     Bundle callback = new Bundle(); callback.putString("rn_request_id",callbackToken);
     boolean sent;
+    usesGeneratedState = !contacts && !request.hasKey("state");
     if(contacts) {
       ShareToContact.Request req=new ShareToContact.Request();
       req.callerLocalEntry=DouyinCallbackActivity.class.getName(); req.callbackExtras=callback;
@@ -181,14 +202,17 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
         html.setHtml(l.getString("url")); html.setTitle(l.getString("title")); html.setDiscription(l.getString("description"));
         if(l.hasKey("thumbnailUrl")) html.setThumbUrl(l.getString("thumbnailUrl")); req.htmlObject=html;
       } else req.mMediaContent=content;
-      pendingType=req.getType(); sent=a.shareToContacts(req);
+      pendingType=ModeType.SHARE_TO_CONTACT_RESP; sent=a.shareToContacts(req);
     } else {
       Share.Request req=new Share.Request(); req.callerLocalEntry=DouyinCallbackActivity.class.getName(); req.callbackExtras=callback;
       req.mMediaContent=content; req.shareToPublish=publish;
-      if(request.hasKey("state")) req.mState=request.getString("state");
+      if (daily) req.shareToType = 1;
+      req.mState = usesGeneratedState ? callbackToken : request.getString("state");
       if(request.hasKey("title")) { req.newShare=true; req.shareParam=new ShareParam(); req.shareParam.titleObject=new TitleObject(); req.shareParam.titleObject.title=request.getString("title"); }
-      pendingType=req.getType(); sent=a.share(req);
+      pendingType=ModeType.SHARE_CONTENT_TO_TT_RESP; sent=a.share(req);
     }
+    Log.d("DouyinShare", "send accepted=" + sent + ", expectedResponseType=" + pendingType
+      + ", daily=" + daily + ", mediaType=" + mediaType + ", count=" + uris.size() + ", album=" + album);
     if(!sent) throw new IllegalStateException("E_SEND_FAILED");
   }
   static void receive(BaseResp response) {
@@ -196,9 +220,21 @@ public final class DouyinModule extends ReactContextBaseJavaModule {
     UiThreadUtil.runOnUiThread(() -> module.complete(response));
   }
   private void complete(BaseResp resp) {
-    if(pending==null || resp.getType()!=pendingType || resp.callbackExtras==null || !callbackToken.equals(resp.callbackExtras.getString("rn_request_id"))) return;
+    if (pending == null || resp.getType() != pendingType) {
+      Log.w("DouyinShare", "Ignoring callback: responseType=" + resp.getType()
+        + ", expectedType=" + pendingType + ", pending=" + (pending != null));
+      return;
+    }
+    String token = resp.callbackExtras == null ? null : resp.callbackExtras.getString("rn_request_id");
+    boolean matches = callbackToken.equals(token)
+      || (token == null && usesGeneratedState && resp instanceof Share.Response
+        && callbackToken.equals(((Share.Response) resp).state));
+    if (!matches) {
+      Log.w("DouyinShare", "Ignoring callback: request token missing or mismatched");
+      return;
+    }
     WritableMap raw=Arguments.createMap(); raw.putInt("errorCode",resp.errorCode); raw.putString("errorMsg",resp.errorMsg);
-    if(resp instanceof Share.Response) { raw.putString("state",((Share.Response)resp).state); raw.putInt("subErrorCode",((Share.Response)resp).subErrorCode); }
+    if(resp instanceof Share.Response) { raw.putString("state",usesGeneratedState ? null : ((Share.Response)resp).state); raw.putInt("subErrorCode",((Share.Response)resp).subErrorCode); }
     WritableMap result=Arguments.createMap(); result.putString("platform","android"); result.putString("status",resp.isSuccess()?"success":resp.isCancel()?"cancelled":"failed"); result.putMap("nativeResponse",raw);
     Promise p=pending; cleanup(); p.resolve(result);
   }

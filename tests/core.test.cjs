@@ -11,6 +11,7 @@ function fixture(cancelRejects = true) {
     getCapabilities: async () => ({ share: 'unknown' }),
     prepareResources: async resources => resources,
     share: (request, id) => { calls.push(['share', request, id]); return new Promise((a,b) => { resolve=a;reject=b }) },
+    forwardToDaily: (request, id) => { calls.push(['daily', request, id]); return new Promise((a,b) => { resolve=a;reject=b }) },
     shareToContacts: (request, id) => { calls.push(['contacts', request, id]); return new Promise((a,b) => { resolve=a;reject=b }) },
     cancelPendingShare: async id => { calls.push(['cancel',id]); if(cancelRejects) reject?.(Object.assign(new Error('native cancelled'), { code: 'E_CANCELLED' })) },
   }
@@ -83,4 +84,17 @@ test('resource preparation validates explicit write option',async()=>{
   const {api}=fixture();await api.configure({clientKey:'k'})
   assert.deepEqual(await api.prepareResources(image.resources,{mediaType:'image',allowPhotoLibraryWrite:true}),image.resources)
   await assert.rejects(api.prepareResources(image.resources,{mediaType:'image',allowPhotoLibraryWrite:'yes'}),{code:'E_INVALID_ARGUMENT'})
+})
+
+test('daily uses the daily bridge and rejects multiple items and work fields', async () => {
+  const f = fixture()
+  await f.api.configure({ clientKey: 'k' })
+  for (const invalid of [{ ...image, resources: [...image.resources, ...image.resources] }, { ...image, targetPage: 'publish' }]) {
+    await assert.rejects(f.api.forwardToDaily(invalid), { code: 'E_INVALID_ARGUMENT' })
+  }
+  const task = f.api.forwardToDaily(image)
+  await assert.rejects(f.api.share(image), { code: 'E_BUSY' })
+  f.complete({ status: 'cancelled' })
+  assert.equal((await task).status, 'cancelled')
+  assert.deepEqual(f.calls.slice(1).map(([method, request]) => [method, request]), [['daily', image]])
 })

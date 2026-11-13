@@ -29,6 +29,12 @@ export interface MediaRequest {
     /** Work caption, mapped to the selected SDK's title text. */
     title?: string;
 }
+export interface DailyRequest {
+    mediaType: MediaType;
+    /** Exactly one prepared image or video. */
+    resources: [Resource];
+    state?: string;
+}
 export interface LinkRequest {
     mediaType: 'link';
     link: {
@@ -61,6 +67,7 @@ export interface NativeBridge {
     getCapabilities(): Promise<Capabilities>;
     prepareResources(resources: Resource[], options: PrepareOptions): Promise<Resource[]>;
     share(request: MediaRequest, requestId: string): Promise<ShareResult>;
+    forwardToDaily(request: DailyRequest, requestId: string): Promise<ShareResult>;
     shareToContacts(request: ContactRequest, requestId: string): Promise<ShareResult>;
     cancelPendingShare(requestId: string): Promise<void>;
 }

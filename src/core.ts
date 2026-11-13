@@ -1,4 +1,4 @@
-import type { NativeBridge, Config, Resource, PrepareOptions, MediaRequest, ContactRequest, ShareOptions, ShareResult } from './types'
+import type { NativeBridge, Config, Resource, PrepareOptions, MediaRequest, ContactRequest, DailyRequest, ShareOptions, ShareResult } from './types'
 export class DouyinError extends Error {
   constructor(public code: string, message: string) { super(message); this.name = 'DouyinError' }
 }
@@ -55,8 +55,17 @@ export function createDouyin(native: NativeBridge) {
   let sequence = 0
   let pending: { id: string; cancel: () => Promise<void>; timer: ReturnType<typeof setTimeout> } | undefined
   function ready() { if (!configured) throw new DouyinError('E_NOT_CONFIGURED', 'Call configure first') }
-  async function send(request: MediaRequest | ContactRequest, contacts: boolean, options: ShareOptions = {}): Promise<ShareResult> {
-    ready(); validateRequest(request, contacts); object(options, ['timeoutMs'])
+  async function send(request: MediaRequest | ContactRequest, mode: 'work' | 'contacts' | 'daily', options: ShareOptions = {}): Promise<ShareResult> {
+    ready()
+    if (mode === 'daily') {
+      object(request, ['mediaType', 'resources', 'state'])
+      validateRequest(request, false)
+      if (!('resources' in request) || request.resources.length !== 1) fail('Daily forwarding requires one image or video')
+    }
+    else {
+      validateRequest(request, mode === 'contacts')
+    }
+    object(options, ['timeoutMs'])
     const timeout = options.timeoutMs ?? 120000
     if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 600000) fail('timeoutMs must be 1000–600000')
     if (pending) throw new DouyinError('E_BUSY', 'Another share is pending')
@@ -74,7 +83,11 @@ export function createDouyin(native: NativeBridge) {
       }
       pending = { id, timer: setTimeout(() => { void cancel('E_TIMEOUT') }, timeout), cancel: () => cancel('E_CANCELLED') }
       let task: Promise<ShareResult>
-      try { task = contacts ? native.shareToContacts(request as ContactRequest, id) : native.share(request as MediaRequest, id) }
+      try {
+        if (mode === 'daily') task = native.forwardToDaily(request as DailyRequest, id)
+        else if (mode === 'contacts') task = native.shareToContacts(request as ContactRequest, id)
+        else task = native.share(request as MediaRequest, id)
+      }
       catch (error) { if (finish()) reject(error); return }
       task.then(result => { if (!cancelling && finish()) resolve(result) }, error => { if (!cancelling && finish()) reject(error) })
     })
@@ -93,8 +106,9 @@ export function createDouyin(native: NativeBridge) {
       if (options.allowPhotoLibraryWrite !== undefined && typeof options.allowPhotoLibraryWrite !== 'boolean') fail('Invalid allowPhotoLibraryWrite')
       return native.prepareResources(items, options)
     },
-    share(request: MediaRequest, options?: ShareOptions) { return send(request, false, options) },
-    shareToContacts(request: ContactRequest, options?: ShareOptions) { return send(request, true, options) },
+    share(request: MediaRequest, options?: ShareOptions) { return send(request, 'work', options) },
+    shareToContacts(request: ContactRequest, options?: ShareOptions) { return send(request, 'contacts', options) },
+    forwardToDaily(request: DailyRequest, options?: ShareOptions) { return send(request, 'daily', options) },
     async cancelPendingShare() { await pending?.cancel() },
   }
 }
